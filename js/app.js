@@ -11,7 +11,8 @@
   var KEY_HISTORY = 'wp.history.v1';
   var HISTORY_MAX = 300;
   var RECENT_EXCLUDE = 40;      // 直近N枚は再表示しない
-  var MIN_INTERVAL_MS = 500;    // 「次の壁紙」の最短間隔
+  var MIN_INTERVAL_MS = 200;    // 「次の壁紙」の最短間隔
+  var PREFETCH_DEPTH = 3;       // 先読みしておく枚数
   var LOAD_TIMEOUT_MS = 20000;
   var MAX_AUTO_RETRY = 3;
   var PAGE_SIZE = 24;
@@ -54,7 +55,10 @@
   var current = null;                // 表示中の履歴エントリ
   var loadToken = 0;                 // 非同期競合対策
   var lastNextAt = 0;
-  var prefetched = null;             // { key, item, url, vw, vh, img }
+  var queue = [];                    // 先読み済み [{ key, item, url, vw, vh, img, sig }]
+  var queueEpoch = 0;                // 設定変更で先読みを無効化するための世代
+  var filling = false;
+  var cursor = 0;                    // 履歴上の表示位置 (0=最新)
   var isLoading = false;
 
   /* ================= 設定 / 保存データ ================= */
@@ -190,7 +194,7 @@
   function recentKeys() {
     var s = new Set();
     for (var i = 0; i < Math.min(history.length, RECENT_EXCLUDE); i++) s.add(P.itemKey(history[i]));
-    if (prefetched) s.add(prefetched.key);
+    queue.forEach(function (q) { s.add(q.key); });
     return s;
   }
 
@@ -222,35 +226,50 @@
     return tryOnce();
   }
 
-  function startPrefetch() {
-    // 先読みは1枚だけ。設定が変わったら破棄される(keyが一致しないため)。
-    if (prefetched || isLoading) return;
-    var token = loadToken;
+  function settingsSig() { return [settings.provider, effectiveOrientation(), settings.quality, settings.device, settings.customW, settings.customH].join('|'); }
+
+  /* ---- 先読みキュー: 常に数枚ためておき、「次へ」で待たせない ---- */
+  var fillFailures = 0, fillTimer = null;
+  function clearQueue() {
+    queue = []; queueEpoch++; filling = false; fillFailures = 0;
+    clearTimeout(fillTimer);
+  }
+  function fillQueue() {
+    if (filling || isLoading || document.hidden) return;
+    if (queue.length >= PREFETCH_DEPTH) return;
+    filling = true;
+    var epoch = queueEpoch, sig = settingsSig();
     var provider = P.get(settings.provider);
     var size = targetSize(effectiveOrientation());
-    var excluded = recentKeys();
-    prefetched = { pending: true, key: '' };
-    provider.pickRandom({ width: size.w, height: size.h, exclude: excluded }).then(function (item) {
+    provider.pickRandom({ width: size.w, height: size.h, exclude: recentKeys() }).then(function (item) {
       var url = provider.imageUrl(item, size.w, size.h);
       if (!P.isAllowedImageUrl(provider.id, url)) throw new Error('blocked');
       return preload(url).then(function (img) {
-        if (token !== loadToken || !prefetched || !prefetched.pending) return;
-        prefetched = { key: P.itemKey(item), item: item, url: url, vw: size.w, vh: size.h, img: img, sig: settingsSig() };
+        if (epoch !== queueEpoch) return;
+        queue.push({ key: P.itemKey(item), item: item, url: url, vw: size.w, vh: size.h, img: img, sig: sig });
+        fillFailures = 0;
       });
     }).catch(function () {
-      if (prefetched && prefetched.pending) prefetched = null;
+      if (epoch === queueEpoch) fillFailures++;
+    }).then(function () {
+      if (epoch !== queueEpoch) return;
+      filling = false;
+      if (fillFailures >= 3) return;                 // 通信不調時は一旦止める(過剰リクエスト防止)
+      if (fillFailures > 0) { fillTimer = setTimeout(fillQueue, 2000 * fillFailures); return; }
+      fillQueue();
     });
   }
-  function settingsSig() { return [settings.provider, effectiveOrientation(), settings.quality, settings.device, settings.customW, settings.customH].join('|'); }
-  function takePrefetched() {
-    if (prefetched && !prefetched.pending && prefetched.sig === settingsSig()) {
-      var p = prefetched; prefetched = null; return p;
+  function takeQueued() {
+    while (queue.length) {
+      var q = queue.shift();
+      if (q.sig === settingsSig()) return q;
     }
     return null;
   }
 
   /* ================= メイン表示 ================= */
   var stage, stageImg, loaderText;
+  var busyTimer = null;
 
   function setStageState(state) { // 'loading' | 'loaded' | 'failed'
     stage.classList.toggle('loaded', state === 'loaded');
@@ -258,8 +277,35 @@
     $('stage-error').hidden = state !== 'failed';
     $('stage-skeleton').hidden = state === 'failed';
   }
+  /* 待つ場合も今の画像は残し、小さな「読み込み中」だけを(少し遅らせて)出す */
+  function setBusy(on, delay) {
+    clearTimeout(busyTimer);
+    if (!on) { stage.classList.remove('busy'); return; }
+    busyTimer = setTimeout(function () { stage.classList.add('busy'); }, delay || 0);
+  }
   function applyStageRatio(vw, vh) {
     stage.style.setProperty('--ar', (vw / vh).toFixed(4));
+  }
+  function updatePrevButton() {
+    $('btn-prev').disabled = cursor + 1 >= history.length;
+  }
+
+  function renderEntry(entry, url, natW, natH) {
+    current = entry;
+    applyStageRatio(entry.vw, entry.vh);
+    stageImg.classList.remove('ready');
+    stageImg.hidden = false;
+    stageImg.src = url;
+    requestAnimationFrame(function () { stageImg.classList.add('ready'); });
+    setStageState('loaded');
+    setBusy(false);
+    var badge = $('res-badge');
+    badge.textContent = natW + ' × ' + natH + ' px';
+    badge.hidden = false;
+    stageImg.alt = entry.author ? ('壁紙（撮影: ' + entry.author + '）') : 'ランダムな壁紙';
+    renderCredit(entry);
+    refreshFavUI();
+    updatePrevButton();
   }
 
   function showEntry(res) {
@@ -267,27 +313,52 @@
       provider: res.item.provider, id: res.item.id, w: res.item.w, h: res.item.h,
       author: res.item.author, pageUrl: res.item.pageUrl, vw: res.vw, vh: res.vh, t: Date.now()
     };
-    current = entry;
     history.unshift(entry);
     if (history.length > HISTORY_MAX) history.length = HISTORY_MAX;
     saveHistory();
-
-    applyStageRatio(res.vw, res.vh);
-    stageImg.classList.remove('ready');
-    stageImg.hidden = false;
-    stageImg.src = res.url;
-    // src反映後にフェードイン
-    requestAnimationFrame(function () { stageImg.classList.add('ready'); });
-    setStageState('loaded');
-    var natW = res.img.naturalWidth || res.vw, natH = res.img.naturalHeight || res.vh;
-    var badge = $('res-badge');
-    badge.textContent = natW + ' × ' + natH + ' px';
-    badge.hidden = false;
-    stageImg.alt = res.item.author ? ('壁紙（撮影: ' + res.item.author + '）') : 'ランダムな壁紙';
-    renderCredit(entry);
-    refreshFavUI();
+    cursor = 0;
+    renderEntry(entry, res.url, res.img.naturalWidth || res.vw, res.img.naturalHeight || res.vh);
     renderHistoryReset();
-    $('btn-next').disabled = false;
+  }
+
+  /* 履歴の i 番目を表示 (戻る / 進む) */
+  function goHistory(i) {
+    if (i < 0 || i >= history.length) return;
+    var entry = history[i];
+    var provider = P.get(entry.provider);
+    var size = (entry.vw && entry.vh) ? { w: entry.vw, h: entry.vh } : targetSize(effectiveOrientation());
+    var url;
+    try {
+      url = provider.imageUrl(entry, size.w, size.h);
+      if (!P.isAllowedImageUrl(provider.id, url)) throw new Error('blocked');
+    } catch (e) { util.toast('画像URLが不正です', 'error'); return; }
+    var prevCursor = cursor;
+    var token = ++loadToken;
+    isLoading = true;
+    cursor = i;
+    updatePrevButton();
+    if (!entry.vw || !entry.vh) { entry = { provider: entry.provider, id: entry.id, w: entry.w, h: entry.h, author: entry.author, pageUrl: entry.pageUrl, vw: size.w, vh: size.h, t: entry.t }; }
+    setBusy(true, 250);
+    preload(url).then(function (img) {
+      if (token !== loadToken) return;
+      isLoading = false;
+      renderEntry(entry, url, img.naturalWidth || size.w, img.naturalHeight || size.h);
+      fillQueue();
+    }).catch(function () {
+      if (token !== loadToken) return;
+      isLoading = false;
+      cursor = prevCursor;
+      updatePrevButton();
+      setBusy(false);
+      util.toast('画像を読み込めませんでした', 'error');
+    });
+  }
+  function goBack() {
+    var now = Date.now();
+    if (now - lastNextAt < MIN_INTERVAL_MS) return;
+    if (cursor + 1 >= history.length) { util.toast('これより前の壁紙はありません'); return; }
+    lastNextAt = now;
+    goHistory(cursor + 1);
   }
 
   function renderCredit(entry) {
@@ -314,42 +385,52 @@
     if (isLoading && !opts.force) return;
     lastNextAt = now;
 
+    // 戻っている最中なら、履歴を1つ進める(新規取得はしない)
+    if (cursor > 0 && !opts.force) { goHistory(cursor - 1); return; }
+
     var token = ++loadToken;
     isLoading = true;
-    $('btn-next').disabled = true;
 
-    var cached = takePrefetched();
-    if (cached) {
+    var cached = takeQueued();
+    if (cached) {          // 先読み済み: 待ち時間ゼロ
       isLoading = false;
       showEntry(cached);
-      startPrefetch();
+      fillQueue();
       return;
     }
-    // prefetch が実行中なら破棄(競合回避)
-    if (prefetched && prefetched.pending) prefetched = null;
 
-    setStageState('loading');
-    stage.classList.remove('loaded');
-    stageImg.classList.remove('ready');
-    $('res-badge').hidden = true;
+    // 先読みが間に合わなかった場合: 今の画像は残したまま、小さく「読み込み中」を出す
     $('loader-text').textContent = '読み込み中…';
+    $('busy-text').textContent = '読み込み中…';
+    if (current) {
+      setStageState('loaded');
+      setBusy(true, 200);
+    } else {
+      setStageState('loading');
+      stage.classList.remove('loaded');
+      stageImg.classList.remove('ready');
+      $('res-badge').hidden = true;
+    }
 
-    fetchWallpaper(token, function (msg) { if (token === loadToken) $('loader-text').textContent = msg; })
+    fetchWallpaper(token, function (msg) {
+      if (token === loadToken) { $('loader-text').textContent = msg; $('busy-text').textContent = msg; }
+    })
       .then(function (res) {
         if (token !== loadToken) return;
         isLoading = false;
+        fillFailures = 0;
         showEntry(res);
-        startPrefetch();
+        fillQueue();
       })
       .catch(function (err) {
         if (token !== loadToken) return;
         isLoading = false;
         if (err && err.message === 'cancelled') return;
+        setBusy(false);
         setStageState('failed');
         $('error-text').textContent = navigator.onLine === false
           ? 'オフラインです。接続を確認して再試行してください。'
           : '画像を読み込めませんでした。時間をおいて再試行してください。';
-        $('btn-next').disabled = false;
       });
   }
 
@@ -668,7 +749,8 @@
     if (key === 'theme') applyTheme();
     if (key === 'fit') applyFit();
     if (key === 'orientation' || key === 'quality' || key === 'provider' || key === 'device' || key === 'customW' || key === 'customH') {
-      prefetched = null;
+      clearQueue();
+      fillQueue();
       util.toast('設定を変更しました。次の壁紙から反映されます');
     }
   }
@@ -700,6 +782,7 @@
   /* ================= 初期化 ================= */
   function bindEvents() {
     $('btn-next').addEventListener('click', function () { loadNext(); });
+    $('btn-prev').addEventListener('click', goBack);
     $('btn-retry').addEventListener('click', function () { loadNext({ force: true }); });
     $('btn-fav').addEventListener('click', function () { if (current) toggleFav(current); });
     $('btn-save').addEventListener('click', function () { saveImage(current); });
@@ -714,7 +797,7 @@
     });
 
     // スワイプ (ステージ / ライトボックス)
-    attachSwipe(stage, function (dir) { if (dir === 'left') loadNext(); stage.dataset.swiped = '1'; setTimeout(function () { stage.dataset.swiped = '0'; }, 350); });
+    attachSwipe(stage, function (dir) { if (dir === 'left') loadNext(); else goBack(); stage.dataset.swiped = '1'; setTimeout(function () { stage.dataset.swiped = '0'; }, 350); });
     attachSwipe($('lb-body'), function (dir) { lbMove(dir === 'left' ? 1 : -1); });
 
     // 設定
@@ -738,7 +821,7 @@
     $('btn-clear-history').addEventListener('click', function () {
       if (!global.confirm('表示履歴をすべて削除しますか？（お気に入りは残ります）')) return;
       history = current ? [history[0]].filter(Boolean) : [];
-      saveHistory(); renderHistoryReset(); renderRoute();
+      cursor = 0; saveHistory(); renderHistoryReset(); updatePrevButton(); renderRoute();
       util.toast('履歴を削除しました');
     });
     $('btn-clear-fav').addEventListener('click', function () {
@@ -775,12 +858,14 @@
         return;
       }
       if (route() !== 'home') return;
-      if (e.key === 'ArrowRight' || (e.key === ' ' && tag !== 'BUTTON' && tag !== 'A')) { e.preventDefault(); loadNext(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); goBack(); }
+      else if (e.key === 'ArrowRight' || (e.key === ' ' && tag !== 'BUTTON' && tag !== 'A')) { e.preventDefault(); loadNext(); }
       else if (e.key === 'f' || e.key === 'F') { if (current) toggleFav(current); }
       else if (e.key === 's' || e.key === 'S') saveImage(current);
     });
 
     global.addEventListener('hashchange', renderRoute);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) fillQueue(); });
     global.addEventListener('online', function () { if (stage.classList.contains('failed')) loadNext({ force: true }); });
 
     // どんなエラーでもサイト全体は止めない
@@ -813,6 +898,7 @@
     bindEvents();
     updateFavBadge();
     syncSettingsUI();
+    updatePrevButton();
     renderRoute();
     loadNext({ force: true });
   }

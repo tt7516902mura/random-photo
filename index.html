@@ -8,7 +8,7 @@
   <meta name="description" content="無料で高画質な壁紙をランダムに表示。PC・iPad・スマートフォン対応。">
   <title>Wallpaper Roulette | ランダム壁紙</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M6 22l7-9 5 6 3-4 5 7z' fill='%23fff'/%3E%3Ccircle cx='22' cy='10' r='3' fill='%23fff'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css?v=6">
+  <link rel="stylesheet" href="css/style.css?v=7">
   <script>
     /* 初回描画前にテーマを適用してチラつきを防ぐ */
     (function () {
@@ -50,11 +50,15 @@
             <button class="btn primary" id="btn-retry" type="button">再試行</button>
           </div>
           <span class="res-badge" id="res-badge" hidden></span>
+          <div class="busy-pill" id="stage-busy" role="status" aria-live="polite"><span class="spinner sm" aria-hidden="true"></span><span id="busy-text">読み込み中…</span></div>
         </figure>
 
         <p class="credit" id="credit" aria-live="polite"></p>
 
         <div class="actions" role="group" aria-label="壁紙の操作">
+          <button class="btn big" id="btn-prev" type="button" aria-label="前の壁紙" title="前の壁紙 (←)" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6l-6 6 6 6"/></svg><span class="lbl">戻る</span>
+          </button>
           <button class="btn primary big" id="btn-next" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6l6 6-6 6" /></svg>次の壁紙
           </button>
@@ -65,7 +69,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5l5 5 5-5M5 21h14"/></svg><span class="lbl">画像を保存</span>
           </button>
         </div>
-        <p class="hint">ショートカット: <kbd>→</kbd> / <kbd>Space</kbd> 次へ ・ <kbd>F</kbd> お気に入り ・ <kbd>S</kbd> 保存 ・ スマホ/タブレットは左右スワイプ</p>
+        <p class="hint">ショートカット: <kbd>←</kbd> 戻る ・ <kbd>→</kbd> / <kbd>Space</kbd> 次へ ・ <kbd>F</kbd> お気に入り ・ <kbd>S</kbd> 保存 ・ スマホ/タブレットは左右スワイプ（右＝戻る、左＝次へ）</p>
       </div>
 
       <section class="history" aria-labelledby="history-title">
@@ -201,8 +205,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/util.js?v=6"></script>
-  <script src="js/providers.js?v=6"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="js/util.js?v=7"></script>
+  <script src="js/providers.js?v=7"></script>
+  <script src="js/app.js?v=7"></script>
 </body>
 </html>
