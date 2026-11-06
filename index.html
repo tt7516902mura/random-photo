@@ -127,7 +127,19 @@
           </div>
         </div>
         <div class="setting">
-          <div class="setting-label"><strong>保存するサイズ</strong><span class="muted">「壁紙サイズ」は向きに合わせて切り抜き、「オリジナル」は元画像の最大サイズ</span></div>
+          <div class="setting-label"><strong>端末サイズ</strong><span class="muted" id="device-info">壁紙の縦横比と保存サイズを端末に合わせます</span></div>
+          <select id="device-select" aria-label="端末サイズ"></select>
+        </div>
+        <div class="setting" id="custom-size-row" hidden>
+          <div class="setting-label"><strong>カスタムサイズ</strong><span class="muted">縦長の向きでの幅×高さ(px)。320〜5000</span></div>
+          <div class="size-inputs">
+            <input id="custom-w" type="number" inputmode="numeric" min="320" max="5000" step="1" aria-label="幅(px)">
+            <span aria-hidden="true">×</span>
+            <input id="custom-h" type="number" inputmode="numeric" min="320" max="5000" step="1" aria-label="高さ(px)">
+          </div>
+        </div>
+        <div class="setting">
+          <div class="setting-label"><strong>保存するサイズ</strong><span class="muted">「壁紙サイズ」は上で選んだ端末のピクセル数に合わせて切り抜き、「オリジナル」は元画像の最大サイズ</span></div>
           <div class="seg" role="radiogroup" aria-label="保存するサイズ" data-setting="saveSize">
             <button type="button" role="radio" data-value="wallpaper">壁紙サイズ</button>
             <button type="button" role="radio" data-value="original">オリジナル</button>
@@ -150,11 +162,6 @@
         </div>
       </div>
 
-      <div class="card about">
-        <h2>このサイトについて</h2>
-        <p>画像は <a href="https://picsum.photos/" target="_blank" rel="noopener noreferrer">Lorem Picsum</a> から取得しています（APIキー不要・無料）。写真は主に <a href="https://unsplash.com/license" target="_blank" rel="noopener noreferrer">Unsplash License</a> の下で提供されており、各画像の作者名を表示しています。</p>
-        <p>Picsum は一般的な写真サービスで、壁紙専用ではありません。アニメ・ゲームなどのジャンルは選べません。画像はこのサイトのサーバーには保存されず、お気に入り・履歴・設定はお使いのブラウザ（LocalStorage）にのみ保存されます。</p>
-      </div>
     </section>
   </main>
 

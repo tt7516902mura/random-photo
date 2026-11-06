@@ -182,7 +182,9 @@ main { width: 100%; max-width: 1280px; margin: 0 auto; padding: 20px 20px calc(4
 .seg { display: inline-flex; padding: 4px; gap: 2px; border-radius: 999px; background: var(--bg-elev2); border: 1px solid var(--border); }
 .seg button { min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; transition: background .2s, color .2s; touch-action: manipulation; }
 .seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-text); }
-select { min-height: 44px; padding: 0 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-elev2); color: var(--text); font: inherit; }
+.size-inputs { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.size-inputs input { width: 96px; min-height: 44px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-elev2); color: var(--text); font: inherit; font-variant-numeric: tabular-nums; }
+select { max-width: 100%; min-height: 44px; padding: 0 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-elev2); color: var(--text); font: inherit; }
 .about { padding: 18px; }
 .about h2 { font-size: 1rem; margin-bottom: 8px; }
 .about p { color: var(--muted); font-size: .875rem; margin: 0 0 10px; }

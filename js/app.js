@@ -18,12 +18,32 @@
 
   var QUALITY = { standard: 1280, high: 1920, max: 2732 }; // 長辺px
 
+  // 端末プリセット (縦長での 幅x高さ ピクセル)
+  var DEVICES = [
+    { id: 'iphone-se', group: 'iPhone', label: 'iPhone SE (第2/3世代)', w: 750, h: 1334 },
+    { id: 'iphone-13', group: 'iPhone', label: 'iPhone 12 / 13 / 14', w: 1170, h: 2532 },
+    { id: 'iphone-15', group: 'iPhone', label: 'iPhone 14 Pro / 15 / 15 Pro / 16', w: 1179, h: 2556 },
+    { id: 'iphone-16pro', group: 'iPhone', label: 'iPhone 16 Pro', w: 1206, h: 2622 },
+    { id: 'iphone-15max', group: 'iPhone', label: 'iPhone 14 Plus / 14・15 Pro Max / 15 Plus', w: 1290, h: 2796 },
+    { id: 'iphone-16max', group: 'iPhone', label: 'iPhone 16 Pro Max', w: 1320, h: 2868 },
+    { id: 'ipad-mini', group: 'iPad', label: 'iPad mini (第6世代以降)', w: 1488, h: 2266 },
+    { id: 'ipad-10', group: 'iPad', label: 'iPad (第10世代) / iPad Air 10.9・11', w: 1640, h: 2360 },
+    { id: 'ipad-pro11', group: 'iPad', label: 'iPad Pro 11インチ', w: 1668, h: 2388 },
+    { id: 'ipad-pro11m4', group: 'iPad', label: 'iPad Pro 11インチ (M4)', w: 1668, h: 2420 },
+    { id: 'ipad-pro129', group: 'iPad', label: 'iPad Pro 12.9インチ', w: 2048, h: 2732 },
+    { id: 'ipad-pro13', group: 'iPad', label: 'iPad Pro 13インチ (M4)', w: 2064, h: 2752 }
+  ];
+  var DEVICE_MIN = 320, DEVICE_MAX = 5000;
+
   var DEFAULT_SETTINGS = {
     theme: 'dark',
     orientation: null, // 初回に端末から決定
     fit: 'fit',
     quality: 'high',
     saveSize: 'wallpaper',
+    device: 'auto',
+    customW: 1170,
+    customH: 2532,
     provider: 'picsum'
   };
 
@@ -54,6 +74,9 @@
     out.fit = s.fit === 'fill' ? 'fill' : 'fit';
     out.quality = QUALITY[s.quality] ? s.quality : DEFAULT_SETTINGS.quality;
     out.saveSize = s.saveSize === 'original' ? 'original' : 'wallpaper';
+    out.device = (s.device === 'auto' || s.device === 'custom' || DEVICES.some(function (d) { return d.id === s.device; })) ? s.device : 'auto';
+    out.customW = util.clamp(parseInt(s.customW, 10) || DEFAULT_SETTINGS.customW, DEVICE_MIN, DEVICE_MAX);
+    out.customH = util.clamp(parseInt(s.customH, 10) || DEFAULT_SETTINGS.customH, DEVICE_MIN, DEVICE_MAX);
     out.provider = (typeof s.provider === 'string' && P.list().some(function (p) { return p.id === s.provider; })) ? s.provider : DEFAULT_SETTINGS.provider;
     return out;
   }
@@ -107,17 +130,35 @@
   }
 
   /* ================= 画像サイズ計算 ================= */
+  /* 選択中の端末の縦長ピクセル数。自動のときは null */
+  function deviceDims() {
+    if (settings.device === 'custom') {
+      var cw = settings.customW, ch = settings.customH;
+      return { w: Math.min(cw, ch), h: Math.max(cw, ch) };
+    }
+    for (var i = 0; i < DEVICES.length; i++) {
+      if (DEVICES[i].id === settings.device) return { w: DEVICES[i].w, h: DEVICES[i].h };
+    }
+    return null;
+  }
   function screenRatio() {
+    var dd = deviceDims();
+    if (dd) return dd.w / dd.h;
     var sw = global.screen && global.screen.width ? global.screen.width : 1080;
     var sh = global.screen && global.screen.height ? global.screen.height : 1920;
     var long = Math.max(sw, sh), short = Math.min(sw, sh);
     var r = short / long; // 0..1
     if (r < 0.4) r = 0.4;
     if (r > 0.8) r = 0.75; // 極端に正方形に近い場合は3:4
+    if (dd) r = dd.w / dd.h;
     return r;
   }
   function targetSize(orientation, quality) {
-    var long = QUALITY[quality || settings.quality];
+    var dd = deviceDims();
+    if (quality === 'exact' && dd) { // 端末のピクセル数ぴったり
+      return orientation === 'portrait' ? { w: dd.w, h: dd.h } : { w: dd.h, h: dd.w };
+    }
+    var long = QUALITY[quality === 'exact' ? 'max' : (quality || settings.quality)];
     var r = screenRatio();
     var short = Math.round(long * r);
     return orientation === 'portrait' ? { w: short, h: long } : { w: long, h: short };
@@ -197,7 +238,7 @@
       if (prefetched && prefetched.pending) prefetched = null;
     });
   }
-  function settingsSig() { return [settings.provider, settings.orientation, settings.quality].join('|'); }
+  function settingsSig() { return [settings.provider, settings.orientation, settings.quality, settings.device, settings.customW, settings.customH].join('|'); }
   function takePrefetched() {
     if (prefetched && !prefetched.pending && prefetched.sig === settingsSig()) {
       var p = prefetched; prefetched = null; return p;
@@ -485,7 +526,7 @@
       var o = provider.originalUrl(entry);
       if (o) return o;
     }
-    var size = targetSize(entry.vh > entry.vw ? 'portrait' : (entry.vw && entry.vh ? 'landscape' : settings.orientation), 'max');
+    var size = targetSize(entry.vh > entry.vw ? 'portrait' : (entry.vw && entry.vh ? 'landscape' : settings.orientation), 'exact');
     return provider.imageUrl(entry, size.w, size.h);
   }
   function revokeSheetUrls() { sheetUrls.forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) { /* noop */ } }); sheetUrls = []; }
@@ -592,6 +633,28 @@
       providers.forEach(function (p) { sel.appendChild(util.el('option', { value: p.id, text: p.name })); });
     }
     sel.value = settings.provider;
+    syncDeviceUI();
+  }
+  function syncDeviceUI() {
+    var ds = $('device-select');
+    if (!ds.options.length) {
+      ds.appendChild(util.el('option', { value: 'auto', text: '自動（この端末の画面に合わせる）' }));
+      ['iPhone', 'iPad'].forEach(function (g) {
+        var og = util.el('optgroup', { label: g });
+        DEVICES.filter(function (d) { return d.group === g; }).forEach(function (d) {
+          og.appendChild(util.el('option', { value: d.id, text: d.label + '（' + d.w + '×' + d.h + '）' }));
+        });
+        ds.appendChild(og);
+      });
+      ds.appendChild(util.el('option', { value: 'custom', text: 'カスタムサイズ…' }));
+    }
+    ds.value = settings.device;
+    $('custom-size-row').hidden = settings.device !== 'custom';
+    $('custom-w').value = settings.customW;
+    $('custom-h').value = settings.customH;
+    var dd = deviceDims();
+    var save = settings.saveSize === 'original' ? 'オリジナルサイズ' : (dd ? (settings.orientation === 'portrait' ? dd.w + '×' + dd.h : dd.h + '×' + dd.w) + ' px' : '最大 ' + targetSize(settings.orientation, 'exact').w + '×' + targetSize(settings.orientation, 'exact').h + ' px');
+    $('device-info').textContent = '保存サイズ: ' + save + ' ／ 縦横比 ' + (dd ? dd.w + ':' + dd.h : '画面に合わせて自動');
   }
   function onSettingChange(key, value) {
     if (settings[key] === value) return;
@@ -600,7 +663,7 @@
     syncSettingsUI();
     if (key === 'theme') applyTheme();
     if (key === 'fit') applyFit();
-    if (key === 'orientation' || key === 'quality' || key === 'provider') {
+    if (key === 'orientation' || key === 'quality' || key === 'provider' || key === 'device' || key === 'customW' || key === 'customH') {
       prefetched = null;
       util.toast('設定を変更しました。次の壁紙から反映されます');
     }
@@ -655,6 +718,16 @@
       seg.addEventListener('click', function (e) {
         var b = e.target.closest('button[data-value]');
         if (b) onSettingChange(seg.getAttribute('data-setting'), b.getAttribute('data-value'));
+      });
+    });
+    $('device-select').addEventListener('change', function (e) { onSettingChange('device', e.target.value); });
+    ['custom-w', 'custom-h'].forEach(function (id) {
+      $(id).addEventListener('change', function (e) {
+        var v = parseInt(e.target.value, 10);
+        if (!(v > 0)) { syncDeviceUI(); return; }
+        var clamped = util.clamp(v, DEVICE_MIN, DEVICE_MAX);
+        if (clamped !== v) util.toast(DEVICE_MIN + '〜' + DEVICE_MAX + 'pxの範囲に調整しました');
+        onSettingChange(id === 'custom-w' ? 'customW' : 'customH', clamped);
       });
     });
     $('provider-select').addEventListener('change', function (e) { onSettingChange('provider', e.target.value); });
