@@ -8,7 +8,7 @@
   <meta name="description" content="無料で高画質な壁紙をランダムに表示。PC・iPad・スマートフォン対応。">
   <title>Wallpaper Roulette | ランダム壁紙</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M6 22l7-9 5 6 3-4 5 7z' fill='%23fff'/%3E%3Ccircle cx='22' cy='10' r='3' fill='%23fff'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css?v=3">
+  <link rel="stylesheet" href="css/style.css?v=4">
   <script>
     /* 初回描画前にテーマを適用してチラつきを防ぐ */
     (function () {
@@ -105,8 +105,9 @@
           </div>
         </div>
         <div class="setting">
-          <div class="setting-label"><strong>画像の向き</strong><span class="muted">取得する壁紙の縦横</span></div>
+          <div class="setting-label"><strong>画像の向き</strong><span class="muted">「自動」は画面の向きに合わせます（iPadを横にすると横長）</span></div>
           <div class="seg" role="radiogroup" aria-label="画像の向き" data-setting="orientation">
+            <button type="button" role="radio" data-value="auto">自動</button>
             <button type="button" role="radio" data-value="portrait">縦長</button>
             <button type="button" role="radio" data-value="landscape">横長</button>
           </div>
@@ -200,8 +201,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/util.js?v=3"></script>
-  <script src="js/providers.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/util.js?v=4"></script>
+  <script src="js/providers.js?v=4"></script>
+  <script src="js/app.js?v=4"></script>
 </body>
 </html>

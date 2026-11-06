@@ -61,16 +61,19 @@
   function isTouchPrimary() {
     return !!(global.matchMedia && global.matchMedia('(pointer: coarse)').matches);
   }
-  function defaultOrientation() {
-    // タッチ端末は縦長、PCは横長を既定に
-    return isTouchPrimary() ? 'portrait' : 'landscape';
+  /* 実際に使う向き。自動のときは現在の画面(ウィンドウ)の縦横で決める */
+  function effectiveOrientation() {
+    if (settings.orientation === 'portrait' || settings.orientation === 'landscape') return settings.orientation;
+    return global.innerWidth > global.innerHeight ? 'landscape' : 'portrait';
   }
   function loadSettings() {
     var s = Store.get(KEY_SETTINGS, {});
     if (!s || typeof s !== 'object') s = {};
     var out = {};
     out.theme = s.theme === 'light' ? 'light' : 'dark';
-    out.orientation = (s.orientation === 'portrait' || s.orientation === 'landscape') ? s.orientation : defaultOrientation();
+    // 利用者が明示的に選んだときだけ固定。それ以外は「自動」(画面の向きに追従)
+    out.orientation = (s.orientationSet === true && (s.orientation === 'portrait' || s.orientation === 'landscape' || s.orientation === 'auto')) ? s.orientation : 'auto';
+    out.orientationSet = s.orientationSet === true;
     out.fit = s.fit === 'fill' ? 'fill' : 'fit';
     out.quality = QUALITY[s.quality] ? s.quality : DEFAULT_SETTINGS.quality;
     out.saveSize = s.saveSize === 'original' ? 'original' : 'wallpaper';
@@ -194,7 +197,7 @@
   /* 画像を1枚選んでプリロードする。失敗時は別画像で再試行。 */
   function fetchWallpaper(token, onStatus) {
     var provider = P.get(settings.provider);
-    var size = targetSize(settings.orientation);
+    var size = targetSize(effectiveOrientation());
     var attempt = 0;
     var excluded = recentKeys();
 
@@ -224,7 +227,7 @@
     if (prefetched || isLoading) return;
     var token = loadToken;
     var provider = P.get(settings.provider);
-    var size = targetSize(settings.orientation);
+    var size = targetSize(effectiveOrientation());
     var excluded = recentKeys();
     prefetched = { pending: true, key: '' };
     provider.pickRandom({ width: size.w, height: size.h, exclude: excluded }).then(function (item) {
@@ -238,7 +241,7 @@
       if (prefetched && prefetched.pending) prefetched = null;
     });
   }
-  function settingsSig() { return [settings.provider, settings.orientation, settings.quality, settings.device, settings.customW, settings.customH].join('|'); }
+  function settingsSig() { return [settings.provider, effectiveOrientation(), settings.quality, settings.device, settings.customW, settings.customH].join('|'); }
   function takePrefetched() {
     if (prefetched && !prefetched.pending && prefetched.sig === settingsSig()) {
       var p = prefetched; prefetched = null; return p;
@@ -526,7 +529,7 @@
       var o = provider.originalUrl(entry);
       if (o) return o;
     }
-    var size = targetSize(entry.vh > entry.vw ? 'portrait' : (entry.vw && entry.vh ? 'landscape' : settings.orientation), 'exact');
+    var size = targetSize(entry.vh > entry.vw ? 'portrait' : (entry.vw && entry.vh ? 'landscape' : effectiveOrientation()), 'exact');
     return provider.imageUrl(entry, size.w, size.h);
   }
   function revokeSheetUrls() { sheetUrls.forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) { /* noop */ } }); sheetUrls = []; }
@@ -653,12 +656,13 @@
     $('custom-w').value = settings.customW;
     $('custom-h').value = settings.customH;
     var dd = deviceDims();
-    var save = settings.saveSize === 'original' ? 'オリジナルサイズ' : (dd ? (settings.orientation === 'portrait' ? dd.w + '×' + dd.h : dd.h + '×' + dd.w) + ' px' : '最大 ' + targetSize(settings.orientation, 'exact').w + '×' + targetSize(settings.orientation, 'exact').h + ' px');
+    var save = settings.saveSize === 'original' ? 'オリジナルサイズ' : (dd ? (effectiveOrientation() === 'portrait' ? dd.w + '×' + dd.h : dd.h + '×' + dd.w) + ' px' : '最大 ' + targetSize(effectiveOrientation(), 'exact').w + '×' + targetSize(effectiveOrientation(), 'exact').h + ' px');
     $('device-info').textContent = '保存サイズ: ' + save + ' ／ 縦横比 ' + (dd ? dd.w + ':' + dd.h : '画面に合わせて自動');
   }
   function onSettingChange(key, value) {
     if (settings[key] === value) return;
     settings[key] = value;
+    if (key === 'orientation') settings.orientationSet = true;
     saveSettings();
     syncSettingsUI();
     if (key === 'theme') applyTheme();
