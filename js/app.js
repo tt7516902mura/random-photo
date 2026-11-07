@@ -360,7 +360,7 @@
     if (!current) return;
     var d = saveDims(current);
     var badge = $('res-badge');
-    badge.textContent = '保存 ' + d.w + ' × ' + d.h + ' px';
+    badge.textContent = d.w + ' × ' + d.h + ' px';
     badge.title = '「画像を保存」で保存される解像度';
   }
   function updatePrevButton() {
@@ -442,13 +442,7 @@
     var c = $('credit');
     c.textContent = '';
     if (entry.author) {
-      c.appendChild(document.createTextNode('Photo by '));
-      if (entry.pageUrl && util.isAllowedUrl(entry.pageUrl, ['unsplash.com'])) {
-        var a = util.el('a', { href: entry.pageUrl, target: '_blank', rel: 'noopener noreferrer', text: entry.author });
-        c.appendChild(a);
-      } else {
-        c.appendChild(document.createTextNode(entry.author));
-      }
+      c.appendChild(document.createTextNode('Photo by ' + entry.author));
       c.appendChild(document.createTextNode(' ・ ' + P.get(entry.provider).license));
     } else {
       c.textContent = P.get(entry.provider).name + ' ・ ' + P.get(entry.provider).license;
@@ -658,7 +652,7 @@
       $('lb-spinner').classList.add('off');
       util.toast('画像を読み込めませんでした', 'error');
     });
-    var meta = (entry.author ? entry.author + ' ・ ' : '') + '保存 ' + saveDims(entry).w + '×' + saveDims(entry).h + 'px' + (entry.w ? '（元 ' + entry.w + '×' + entry.h + '）' : '');
+    var meta = (entry.author ? entry.author + ' ・ ' : '') + saveDims(entry).w + '×' + saveDims(entry).h + 'px' + (entry.w ? '（元 ' + entry.w + '×' + entry.h + '）' : '');
     $('lb-meta').textContent = meta + '  [' + (lb.index + 1) + '/' + lb.list.length + ']';
     setFavButton($('lb-fav'), isFav(entry));
     $('lb-prev').hidden = lb.index <= 0;
@@ -815,7 +809,7 @@
     $('custom-h').value = settings.customH;
     var dd = deviceDims();
     var save = settings.saveSize === 'original' ? 'オリジナルサイズ' : (dd ? (effectiveOrientation() === 'portrait' ? dd.w + '×' + dd.h : dd.h + '×' + dd.w) + ' px' : '最大 ' + targetSize(effectiveOrientation(), 'exact').w + '×' + targetSize(effectiveOrientation(), 'exact').h + ' px');
-    $('device-info').textContent = '保存サイズ: ' + save + '（' + (effectiveOrientation() === 'portrait' ? '縦向き' : '横向き') + '）' + (settings.orientation === 'auto' ? ' ／ 向きは画像の向き設定で変更できます' : '');
+    $('device-info').textContent = '保存サイズ: ' + save + '（' + (effectiveOrientation() === 'portrait' ? '縦向き' : '横向き') + '）';
   }
   function onSettingChange(key, value) {
     if (settings[key] === value) return;
