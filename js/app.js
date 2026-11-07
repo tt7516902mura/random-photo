@@ -632,20 +632,21 @@
   function buildShareUrl() {
     var code = encodeShare(favorites);
     if (!code) return null;
-    return global.location.href.split('#')[0] + '#share' + code;
+    return global.location.href.split('#')[0] + '#/shared?=' + code;
   }
   /* リンクの内容は信用せず、形式を検証して復元する (旧形式 #/shared?i=… も読める) */
   function parseSharedHash() {
     var hash = global.location.hash || '';
     var pairs = [];
-    var mNew = /^#share([0-9a-zA-Z]*)$/.exec(hash);
-    if (mNew) {
-      pairs = decodeShare(mNew[1].toLowerCase());
+    var mNew = /^#share([0-9a-zA-Z]*)$/.exec(hash);              // #share0of0nx…
+    var mQ = /[?&]i?=([^&]*)/.exec(hash);                          // #/shared?=0of0nx… / ?i=… / 旧形式
+    var codeStr = mNew ? mNew[1] : (mQ ? mQ[1] : null);
+    if (codeStr === null) return [];
+    if (/^[0-9a-zA-Z]*$/.test(codeStr)) {
+      pairs = decodeShare(codeStr.toLowerCase());
     } else {
-      var m = /[?&]i=([^&]*)/.exec(hash);
-      if (!m) return [];
       var raw;
-      try { raw = decodeURIComponent(m[1]); } catch (e) { return []; }
+      try { raw = decodeURIComponent(codeStr); } catch (e) { return []; }
       raw.split(',').slice(0, SHARE_MAX).forEach(function (tok) {
         var mm = SHARE_ITEM_RE.exec(tok);
         if (mm) pairs.push({ id: mm[1], o: mm[2] });
