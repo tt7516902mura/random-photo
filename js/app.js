@@ -593,7 +593,8 @@
     this.more.hidden = this.hasIO || this.shown >= list.length;
   };
 
-  var historyPager, favPager;
+  var historyPager, favPager, sharedPager;
+  var sharedList = [];
   function renderHistoryReset() {
     $('history-count').textContent = history.length ? history.length + '枚' : '';
     $('set-history-info').textContent = history.length + '件（最大' + HISTORY_MAX + '件）';
@@ -601,7 +602,82 @@
   }
   function renderFavReset() {
     $('fav-summary').textContent = favorites.length ? favorites.length + '枚' : '';
+    $('fav-share').disabled = favorites.length === 0;
     if (favPager) favPager.reset();
+  }
+
+  /* ================= お気に入りの共有 (リンク) ================= */
+  var SHARE_MAX = 300;
+  var SHARE_ITEM_RE = /^([0-9]{1,6}|s_[a-z0-9]{3,32}):([pl])$/;
+
+  function buildShareUrl() {
+    var parts = favorites.slice(0, SHARE_MAX).map(function (f) {
+      return f.id + ':' + (f.vw && f.vh && f.vw > f.vh ? 'l' : 'p');
+    });
+    return global.location.href.split('#')[0] + '#/shared?i=' + parts.join(',');
+  }
+  /* リンクの内容は信用せず、形式を検証して復元する */
+  function parseSharedHash() {
+    var m = /[?&]i=([^&]*)/.exec(global.location.hash || '');
+    if (!m) return [];
+    var raw;
+    try { raw = decodeURIComponent(m[1]); } catch (e) { return []; }
+    var provider = P.get(DEFAULT_SETTINGS.provider);
+    var seen = {}, out = [];
+    raw.split(',').slice(0, SHARE_MAX).forEach(function (tok) {
+      var mm = SHARE_ITEM_RE.exec(tok);
+      if (!mm) return;
+      var it = provider.validateItem({ provider: provider.id, id: mm[1] });
+      if (!it) return;
+      var k = P.itemKey(it);
+      if (seen[k]) return;
+      seen[k] = true;
+      var size = targetSize(mm[2] === 'l' ? 'landscape' : 'portrait', 'display');
+      it.vw = size.w; it.vh = size.h; it.t = Date.now();
+      out.push(it);
+    });
+    return out;
+  }
+  function renderSharedReset() {
+    sharedList = parseSharedHash();
+    $('shared-summary').textContent = sharedList.length ? sharedList.length + '枚' : '';
+    $('shared-add').disabled = sharedList.length === 0;
+    if (sharedPager) sharedPager.reset();
+  }
+  function addAllShared() {
+    var added = 0;
+    for (var i = sharedList.length - 1; i >= 0; i--) {
+      if (!isFav(sharedList[i])) { favorites.unshift(copyEntry(sharedList[i])); added++; }
+    }
+    saveFavorites();
+    refreshFavUI();
+    util.toast(added ? added + '枚をお気に入りに追加しました' : 'すべて追加済みです');
+  }
+  function copyText(text) {
+    function legacy() {
+      var ta = util.el('textarea', { readonly: 'readonly' });
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      var okCopy = false;
+      try { okCopy = document.execCommand('copy'); } catch (e) { /* noop */ }
+      ta.remove();
+      if (okCopy) util.toast('共有リンクをコピーしました');
+      else global.prompt('このリンクをコピーしてください', text);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { util.toast('共有リンクをコピーしました'); }, legacy);
+    } else legacy();
+  }
+  function shareFavorites() {
+    if (!favorites.length) { util.toast('お気に入りがありません'); return; }
+    var url = buildShareUrl();
+    if (favorites.length > SHARE_MAX) util.toast('新しい' + SHARE_MAX + '枚までを共有します');
+    if (navigator.share) {
+      navigator.share({ title: 'Wallpaper Roulette のお気に入り', url: url }).catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        copyText(url);
+      });
+    } else copyText(url);
   }
 
   /* ================= ライトボックス ================= */
@@ -829,13 +905,13 @@
 
   /* ================= ルーティング ================= */
   function route() {
-    var h = (global.location.hash || '#/').replace(/^#\/?/, '');
-    if (h === 'favorites' || h === 'settings') return h;
+    var h = (global.location.hash || '#/').replace(/^#\/?/, '').split('?')[0];
+    if (h === 'favorites' || h === 'settings' || h === 'shared') return h;
     return 'home';
   }
   function renderRoute() {
     var r = route();
-    ['home', 'favorites', 'settings'].forEach(function (name) {
+    ['home', 'favorites', 'settings', 'shared'].forEach(function (name) {
       $('view-' + name).hidden = name !== r;
     });
     document.querySelectorAll('.main-nav a').forEach(function (a) {
@@ -844,17 +920,20 @@
       if (active) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
     if (r === 'favorites') renderFavReset();
+    if (r === 'shared') renderSharedReset();
     if (r === 'settings') { syncSettingsUI(); $('set-fav-info').textContent = favorites.length + '件'; $('set-history-info').textContent = history.length + '件（最大' + HISTORY_MAX + '件）'; }
     if (r === 'home') renderHistoryReset();
     closeLightbox();
     global.scrollTo(0, 0);
-    document.title = (r === 'favorites' ? 'お気に入り' : r === 'settings' ? '設定' : 'ランダム壁紙') + ' | Wallpaper Roulette';
+    document.title = (r === 'favorites' ? 'お気に入り' : r === 'settings' ? '設定' : r === 'shared' ? '共有されたお気に入り' : 'ランダム壁紙') + ' | Wallpaper Roulette';
   }
 
   /* ================= 初期化 ================= */
   function bindEvents() {
     $('btn-next').addEventListener('click', function () { loadNext(); });
     $('btn-prev').addEventListener('click', goBack);
+    $('fav-share').addEventListener('click', shareFavorites);
+    $('shared-add').addEventListener('click', addAllShared);
     $('btn-retry').addEventListener('click', function () { loadNext({ force: true }); });
     $('btn-fav').addEventListener('click', function () { if (current) toggleFav(current); });
     $('btn-save').addEventListener('click', function () { saveImage(current); });
@@ -966,6 +1045,7 @@
     applyTheme();
     applyFit();
     historyPager = new Pager('history-grid', 'history-more', 'history-sentinel', function () { return history; }, 'history-empty');
+    sharedPager = new Pager('shared-grid', 'shared-more', 'shared-sentinel', function () { return sharedList; }, 'shared-empty');
     favPager = new Pager('fav-grid', 'fav-more', 'fav-sentinel', function () { return favorites; }, 'fav-empty');
     bindEvents();
     updateFavBadge();
