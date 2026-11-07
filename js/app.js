@@ -610,29 +610,56 @@
   var SHARE_MAX = 300;
   var SHARE_ITEM_RE = /^([0-9]{1,6}|s_[a-z0-9]{3,32}):([pl])$/;
 
-  function buildShareUrl() {
-    var parts = favorites.slice(0, SHARE_MAX).map(function (f) {
-      return f.id + ':' + (f.vw && f.vh && f.vw > f.vh ? 'l' : 'p');
+  /* 英小文字+数字のみのコード。1枚=3文字(36進数): 番号*2 + (横向きなら1) */
+  function encodeShare(list) {
+    var out = '';
+    list.slice(0, SHARE_MAX).forEach(function (f) {
+      if (!/^\d{1,5}$/.test(f.id) || +f.id > 23327) return;   // seed方式の画像などは共有対象外
+      var n = (+f.id) * 2 + (f.vw && f.vh && f.vw > f.vh ? 1 : 0);
+      out += ('000' + n.toString(36)).slice(-3);
     });
-    return global.location.href.split('#')[0] + '#/shared?i=' + parts.join(',');
+    return out;
   }
-  /* リンクの内容は信用せず、形式を検証して復元する */
+  function decodeShare(code) {
+    var items = [];
+    for (var i = 0; i + 3 <= code.length; i += 3) {
+      var n = parseInt(code.substr(i, 3), 36);
+      if (isNaN(n)) continue;
+      items.push({ id: String(Math.floor(n / 2)), o: n % 2 ? 'l' : 'p' });
+    }
+    return items;
+  }
+  function buildShareUrl() {
+    var code = encodeShare(favorites);
+    if (!code) return null;
+    return global.location.href.split('#')[0] + '#share' + code;
+  }
+  /* リンクの内容は信用せず、形式を検証して復元する (旧形式 #/shared?i=… も読める) */
   function parseSharedHash() {
-    var m = /[?&]i=([^&]*)/.exec(global.location.hash || '');
-    if (!m) return [];
-    var raw;
-    try { raw = decodeURIComponent(m[1]); } catch (e) { return []; }
+    var hash = global.location.hash || '';
+    var pairs = [];
+    var mNew = /^#share([0-9a-zA-Z]*)$/.exec(hash);
+    if (mNew) {
+      pairs = decodeShare(mNew[1].toLowerCase());
+    } else {
+      var m = /[?&]i=([^&]*)/.exec(hash);
+      if (!m) return [];
+      var raw;
+      try { raw = decodeURIComponent(m[1]); } catch (e) { return []; }
+      raw.split(',').slice(0, SHARE_MAX).forEach(function (tok) {
+        var mm = SHARE_ITEM_RE.exec(tok);
+        if (mm) pairs.push({ id: mm[1], o: mm[2] });
+      });
+    }
     var provider = P.get(DEFAULT_SETTINGS.provider);
     var seen = {}, out = [];
-    raw.split(',').slice(0, SHARE_MAX).forEach(function (tok) {
-      var mm = SHARE_ITEM_RE.exec(tok);
-      if (!mm) return;
-      var it = provider.validateItem({ provider: provider.id, id: mm[1] });
+    pairs.slice(0, SHARE_MAX).forEach(function (pr) {
+      var it = provider.validateItem({ provider: provider.id, id: pr.id });
       if (!it) return;
       var k = P.itemKey(it);
       if (seen[k]) return;
       seen[k] = true;
-      var size = targetSize(mm[2] === 'l' ? 'landscape' : 'portrait', 'display');
+      var size = targetSize(pr.o === 'l' ? 'landscape' : 'portrait', 'display');
       it.vw = size.w; it.vh = size.h; it.t = Date.now();
       out.push(it);
     });
@@ -671,6 +698,7 @@
   function shareFavorites() {
     if (!favorites.length) { util.toast('お気に入りがありません'); return; }
     var url = buildShareUrl();
+    if (!url) { util.toast('共有できる画像がありません'); return; }
     if (favorites.length > SHARE_MAX) util.toast('新しい' + SHARE_MAX + '枚までを共有します');
     if (navigator.share) {
       navigator.share({ title: 'Wallpaper Roulette のお気に入り', url: url }).catch(function (err) {
@@ -907,6 +935,7 @@
   function route() {
     var h = (global.location.hash || '#/').replace(/^#\/?/, '').split('?')[0];
     if (h === 'favorites' || h === 'settings' || h === 'shared') return h;
+    if (/^share[0-9a-zA-Z]*$/.test(h)) return 'shared';
     return 'home';
   }
   function renderRoute() {
