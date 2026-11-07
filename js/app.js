@@ -13,27 +13,66 @@
   var RECENT_EXCLUDE = 40;      // 直近N枚は再表示しない
   var MIN_INTERVAL_MS = 200;    // 「次の壁紙」の最短間隔
   var PREFETCH_DEPTH = 3;       // 先読みしておく枚数
+  var PREFETCH_PARALLEL = 2;    // 先読みの同時取得数
   var LOAD_TIMEOUT_MS = 20000;
   var MAX_AUTO_RETRY = 3;
   var PAGE_SIZE = 24;
 
   var QUALITY = { standard: 1280, high: 1920, max: 2732 }; // 長辺px
 
-  // 端末プリセット (縦長での 幅x高さ ピクセル)
+  // 端末プリセット (縦長での 幅x高さ ピクセル / 新しい機種順)
   var DEVICES = [
-    { id: 'iphone-se', group: 'iPhone', label: 'iPhone SE (第2/3世代)', w: 750, h: 1334 },
-    { id: 'iphone-13', group: 'iPhone', label: 'iPhone 12 / 13 / 14', w: 1170, h: 2532 },
-    { id: 'iphone-15', group: 'iPhone', label: 'iPhone 14 Pro / 15 / 15 Pro / 16', w: 1179, h: 2556 },
+    { id: 'iphone-17promax', group: 'iPhone', label: 'iPhone 17 Pro Max', w: 1320, h: 2868 },
+    { id: 'iphone-17pro', group: 'iPhone', label: 'iPhone 17 Pro', w: 1206, h: 2622 },
+    { id: 'iphone-17', group: 'iPhone', label: 'iPhone 17', w: 1206, h: 2622 },
+    { id: 'iphone-air', group: 'iPhone', label: 'iPhone Air', w: 1260, h: 2736 },
+    { id: 'iphone-17e', group: 'iPhone', label: 'iPhone 17e', w: 1170, h: 2532 },
+    { id: 'iphone-16promax', group: 'iPhone', label: 'iPhone 16 Pro Max', w: 1320, h: 2868 },
     { id: 'iphone-16pro', group: 'iPhone', label: 'iPhone 16 Pro', w: 1206, h: 2622 },
-    { id: 'iphone-15max', group: 'iPhone', label: 'iPhone 14 Plus / 14・15 Pro Max / 15 Plus', w: 1290, h: 2796 },
-    { id: 'iphone-16max', group: 'iPhone', label: 'iPhone 16 Pro Max', w: 1320, h: 2868 },
-    { id: 'ipad-mini', group: 'iPad', label: 'iPad mini (第6世代以降)', w: 1488, h: 2266 },
-    { id: 'ipad-10', group: 'iPad', label: 'iPad (第10世代) / iPad Air 10.9・11', w: 1640, h: 2360 },
-    { id: 'ipad-pro11', group: 'iPad', label: 'iPad Pro 11インチ', w: 1668, h: 2388 },
-    { id: 'ipad-pro11m4', group: 'iPad', label: 'iPad Pro 11インチ (M4)', w: 1668, h: 2420 },
-    { id: 'ipad-pro129', group: 'iPad', label: 'iPad Pro 12.9インチ', w: 2048, h: 2732 },
-    { id: 'ipad-pro13', group: 'iPad', label: 'iPad Pro 13インチ (M4)', w: 2064, h: 2752 }
+    { id: 'iphone-16plus', group: 'iPhone', label: 'iPhone 16 Plus', w: 1290, h: 2796 },
+    { id: 'iphone-16', group: 'iPhone', label: 'iPhone 16', w: 1179, h: 2556 },
+    { id: 'iphone-16e', group: 'iPhone', label: 'iPhone 16e', w: 1170, h: 2532 },
+    { id: 'iphone-15promax', group: 'iPhone', label: 'iPhone 15 Pro Max', w: 1290, h: 2796 },
+    { id: 'iphone-15pro', group: 'iPhone', label: 'iPhone 15 Pro', w: 1179, h: 2556 },
+    { id: 'iphone-15plus', group: 'iPhone', label: 'iPhone 15 Plus', w: 1290, h: 2796 },
+    { id: 'iphone-15', group: 'iPhone', label: 'iPhone 15', w: 1179, h: 2556 },
+    { id: 'iphone-14promax', group: 'iPhone', label: 'iPhone 14 Pro Max', w: 1290, h: 2796 },
+    { id: 'iphone-14pro', group: 'iPhone', label: 'iPhone 14 Pro', w: 1179, h: 2556 },
+    { id: 'iphone-14plus', group: 'iPhone', label: 'iPhone 14 Plus', w: 1284, h: 2778 },
+    { id: 'iphone-14', group: 'iPhone', label: 'iPhone 14', w: 1170, h: 2532 },
+    { id: 'iphone-13promax', group: 'iPhone', label: 'iPhone 13 Pro Max', w: 1284, h: 2778 },
+    { id: 'iphone-13pro', group: 'iPhone', label: 'iPhone 13 Pro', w: 1170, h: 2532 },
+    { id: 'iphone-13', group: 'iPhone', label: 'iPhone 13', w: 1170, h: 2532 },
+    { id: 'iphone-13mini', group: 'iPhone', label: 'iPhone 13 mini', w: 1080, h: 2340 },
+    { id: 'iphone-12promax', group: 'iPhone', label: 'iPhone 12 Pro Max', w: 1284, h: 2778 },
+    { id: 'iphone-12pro', group: 'iPhone', label: 'iPhone 12 Pro', w: 1170, h: 2532 },
+    { id: 'iphone-12', group: 'iPhone', label: 'iPhone 12', w: 1170, h: 2532 },
+    { id: 'iphone-12mini', group: 'iPhone', label: 'iPhone 12 mini', w: 1080, h: 2340 },
+    { id: 'iphone-se3', group: 'iPhone', label: 'iPhone SE（第3世代）', w: 750, h: 1334 },
+    { id: 'iphone-se2', group: 'iPhone', label: 'iPhone SE（第2世代）', w: 750, h: 1334 },
+    { id: 'iphone-11promax', group: 'iPhone', label: 'iPhone 11 Pro Max', w: 1242, h: 2688 },
+    { id: 'iphone-11pro', group: 'iPhone', label: 'iPhone 11 Pro', w: 1125, h: 2436 },
+    { id: 'iphone-11', group: 'iPhone', label: 'iPhone 11', w: 828, h: 1792 },
+    { id: 'iphone-xsmax', group: 'iPhone', label: 'iPhone XS Max', w: 1242, h: 2688 },
+    { id: 'iphone-xs', group: 'iPhone', label: 'iPhone XS / X', w: 1125, h: 2436 },
+    { id: 'iphone-xr', group: 'iPhone', label: 'iPhone XR', w: 828, h: 1792 },
+    { id: 'ipad-pro13', group: 'iPad', label: 'iPad Pro 13インチ（M5 / M4）', w: 2064, h: 2752 },
+    { id: 'ipad-pro11m4', group: 'iPad', label: 'iPad Pro 11インチ（M5 / M4）', w: 1668, h: 2420 },
+    { id: 'ipad-air13', group: 'iPad', label: 'iPad Air 13インチ（M4 / M3 / M2）', w: 2048, h: 2732 },
+    { id: 'ipad-air11', group: 'iPad', label: 'iPad Air 11インチ（M4 / M3 / M2）', w: 1640, h: 2360 },
+    { id: 'ipad-a16', group: 'iPad', label: 'iPad（A16）', w: 1640, h: 2360 },
+    { id: 'ipad-mini-a17', group: 'iPad', label: 'iPad mini（A17 Pro）', w: 1488, h: 2266 },
+    { id: 'ipad-10', group: 'iPad', label: 'iPad（第10世代）', w: 1640, h: 2360 },
+    { id: 'ipad-air5', group: 'iPad', label: 'iPad Air（第5 / 第4世代）', w: 1640, h: 2360 },
+    { id: 'ipad-pro129', group: 'iPad', label: 'iPad Pro 12.9インチ（第3〜6世代）', w: 2048, h: 2732 },
+    { id: 'ipad-pro11', group: 'iPad', label: 'iPad Pro 11インチ（第1〜4世代）', w: 1668, h: 2388 },
+    { id: 'ipad-mini6', group: 'iPad', label: 'iPad mini（第6世代）', w: 1488, h: 2266 },
+    { id: 'ipad-9', group: 'iPad', label: 'iPad（第9 / 第8 / 第7世代）', w: 1620, h: 2160 },
+    { id: 'ipad-air3', group: 'iPad', label: 'iPad Air（第3世代）/ iPad Pro 10.5インチ', w: 1668, h: 2224 },
+    { id: 'ipad-mini5', group: 'iPad', label: 'iPad mini（第5世代）', w: 1536, h: 2048 }
   ];
+  // 旧バージョンで保存された端末IDの読み替え
+  var LEGACY_DEVICE = { 'iphone-se': 'iphone-se3', 'iphone-15max': 'iphone-15plus', 'iphone-16max': 'iphone-16promax', 'ipad-mini': 'ipad-mini-a17' };
   var DEVICE_MIN = 320, DEVICE_MAX = 5000;
 
   var DEFAULT_SETTINGS = {
@@ -57,7 +96,8 @@
   var lastNextAt = 0;
   var queue = [];                    // 先読み済み [{ key, item, url, vw, vh, img, sig }]
   var queueEpoch = 0;                // 設定変更で先読みを無効化するための世代
-  var filling = false;
+  var fills = 0;                     // 取得中の先読み数
+  var reserved = new Set();          // 取得中の画像キー(重複防止)
   var cursor = 0;                    // 履歴上の表示位置 (0=最新)
   var isLoading = false;
 
@@ -81,7 +121,8 @@
     out.fit = s.fit === 'fill' ? 'fill' : 'fit';
     out.quality = QUALITY[s.quality] ? s.quality : DEFAULT_SETTINGS.quality;
     out.saveSize = s.saveSize === 'original' ? 'original' : 'wallpaper';
-    out.device = (s.device === 'auto' || s.device === 'custom' || DEVICES.some(function (d) { return d.id === s.device; })) ? s.device : 'auto';
+    var dev = LEGACY_DEVICE[s.device] || s.device;
+    out.device = (dev === 'auto' || dev === 'custom' || DEVICES.some(function (d) { return d.id === dev; })) ? dev : 'auto';
     out.customW = util.clamp(parseInt(s.customW, 10) || DEFAULT_SETTINGS.customW, DEVICE_MIN, DEVICE_MAX);
     out.customH = util.clamp(parseInt(s.customH, 10) || DEFAULT_SETTINGS.customH, DEVICE_MIN, DEVICE_MAX);
     out.provider = (typeof s.provider === 'string' && P.list().some(function (p) { return p.id === s.provider; })) ? s.provider : DEFAULT_SETTINGS.provider;
@@ -148,6 +189,25 @@
     }
     return null;
   }
+  /* 表示用に必要な長辺px: 画面上の実際の表示サイズ x 画面密度。画質設定は上限として働く */
+  function displayLong(orientation) {
+    var r = screenRatio();
+    var ar = orientation === 'portrait' ? r : 1 / r;            // 幅/高さ
+    var bw = Math.max(280, (global.innerWidth || 1280) - 40);
+    var bh = Math.max(300, (global.innerHeight || 800) - 200);
+    var h = settings.fit === 'fill' ? Math.max(bh, bw / ar) : Math.min(bh, bw / ar);
+    var px = Math.max(h, h * ar) * Math.min(global.devicePixelRatio || 1, 3);
+    var cap = QUALITY[settings.quality];
+    return util.clamp(Math.ceil(px / 64) * 64, 640, cap);
+  }
+  /* 保存される画像の解像度 (表示用とは別) */
+  function saveDims(entry) {
+    var provider = P.get(entry.provider);
+    if (settings.saveSize === 'original' && provider.originalUrl && provider.originalUrl(entry)) {
+      return { w: Math.min(entry.w, 5000), h: Math.min(entry.h, 5000) };
+    }
+    return targetSize(entry.vh > entry.vw ? 'portrait' : (entry.vw && entry.vh ? 'landscape' : effectiveOrientation()), 'exact');
+  }
   function screenRatio() {
     var dd = deviceDims();
     if (dd) return dd.w / dd.h;
@@ -165,7 +225,8 @@
     if (quality === 'exact' && dd) { // 端末のピクセル数ぴったり
       return orientation === 'portrait' ? { w: dd.w, h: dd.h } : { w: dd.h, h: dd.w };
     }
-    var long = QUALITY[quality === 'exact' ? 'max' : (quality || settings.quality)];
+    var long = quality === 'display' ? displayLong(orientation)
+      : QUALITY[quality === 'exact' ? 'max' : (quality || settings.quality)];
     var r = screenRatio();
     var short = Math.round(long * r);
     return orientation === 'portrait' ? { w: short, h: long } : { w: long, h: short };
@@ -201,7 +262,7 @@
   /* 画像を1枚選んでプリロードする。失敗時は別画像で再試行。 */
   function fetchWallpaper(token, onStatus) {
     var provider = P.get(settings.provider);
-    var size = targetSize(effectiveOrientation());
+    var size = targetSize(effectiveOrientation(), 'display');
     var attempt = 0;
     var excluded = recentKeys();
 
@@ -231,31 +292,40 @@
   /* ---- 先読みキュー: 常に数枚ためておき、「次へ」で待たせない ---- */
   var fillFailures = 0, fillTimer = null;
   function clearQueue() {
-    queue = []; queueEpoch++; filling = false; fillFailures = 0;
+    queue = []; queueEpoch++; fills = 0; fillFailures = 0; reserved.clear();
     clearTimeout(fillTimer);
   }
   function fillQueue() {
-    if (filling || isLoading || document.hidden) return;
-    if (queue.length >= PREFETCH_DEPTH) return;
-    filling = true;
-    var epoch = queueEpoch, sig = settingsSig();
+    if (isLoading || document.hidden || fillFailures >= 3) return;
+    while (fills < PREFETCH_PARALLEL && queue.length + fills < PREFETCH_DEPTH) startFill();
+  }
+  function startFill() {
+    fills++;
+    var epoch = queueEpoch, sig = settingsSig(), key = null;
     var provider = P.get(settings.provider);
-    var size = targetSize(effectiveOrientation());
-    provider.pickRandom({ width: size.w, height: size.h, exclude: recentKeys() }).then(function (item) {
+    var size = targetSize(effectiveOrientation(), 'display');
+    var excl = recentKeys();
+    reserved.forEach(function (k) { excl.add(k); });
+    provider.pickRandom({ width: size.w, height: size.h, exclude: excl }).then(function (item) {
+      if (epoch !== queueEpoch) return;
+      var k = P.itemKey(item);
+      if (excl.has(k) || reserved.has(k)) return;        // 同時取得中の別枠と重複 → 捨てて取り直す
       var url = provider.imageUrl(item, size.w, size.h);
       if (!P.isAllowedImageUrl(provider.id, url)) throw new Error('blocked');
+      key = k; reserved.add(k);
       return preload(url).then(function (img) {
         if (epoch !== queueEpoch) return;
-        queue.push({ key: P.itemKey(item), item: item, url: url, vw: size.w, vh: size.h, img: img, sig: sig });
+        queue.push({ key: k, item: item, url: url, vw: size.w, vh: size.h, img: img, sig: sig });
         fillFailures = 0;
       });
     }).catch(function () {
       if (epoch === queueEpoch) fillFailures++;
     }).then(function () {
       if (epoch !== queueEpoch) return;
-      filling = false;
-      if (fillFailures >= 3) return;                 // 通信不調時は一旦止める(過剰リクエスト防止)
-      if (fillFailures > 0) { fillTimer = setTimeout(fillQueue, 2000 * fillFailures); return; }
+      if (key) reserved.delete(key);
+      fills = Math.max(0, fills - 1);
+      if (fillFailures >= 3) return;                     // 通信不調時は止める(過剰リクエスト防止)
+      if (fillFailures > 0) { clearTimeout(fillTimer); fillTimer = setTimeout(fillQueue, 2000 * fillFailures); return; }
       fillQueue();
     });
   }
@@ -286,6 +356,13 @@
   function applyStageRatio(vw, vh) {
     stage.style.setProperty('--ar', (vw / vh).toFixed(4));
   }
+  function updateBadge() {
+    if (!current) return;
+    var d = saveDims(current);
+    var badge = $('res-badge');
+    badge.textContent = '保存 ' + d.w + ' × ' + d.h + ' px';
+    badge.title = '「画像を保存」で保存される解像度';
+  }
   function updatePrevButton() {
     $('btn-prev').disabled = cursor + 1 >= history.length;
   }
@@ -300,8 +377,8 @@
     setStageState('loaded');
     setBusy(false);
     var badge = $('res-badge');
-    badge.textContent = natW + ' × ' + natH + ' px';
     badge.hidden = false;
+    updateBadge();
     stageImg.alt = entry.author ? ('壁紙（撮影: ' + entry.author + '）') : 'ランダムな壁紙';
     renderCredit(entry);
     refreshFavUI();
@@ -581,7 +658,7 @@
       $('lb-spinner').classList.add('off');
       util.toast('画像を読み込めませんでした', 'error');
     });
-    var meta = (entry.author ? entry.author + ' ・ ' : '') + size.w + '×' + size.h + 'px' + (entry.w ? '（元 ' + entry.w + '×' + entry.h + '）' : '');
+    var meta = (entry.author ? entry.author + ' ・ ' : '') + '保存 ' + saveDims(entry).w + '×' + saveDims(entry).h + 'px' + (entry.w ? '（元 ' + entry.w + '×' + entry.h + '）' : '');
     $('lb-meta').textContent = meta + '  [' + (lb.index + 1) + '/' + lb.list.length + ']';
     setFavButton($('lb-fav'), isFav(entry));
     $('lb-prev').hidden = lb.index <= 0;
@@ -738,7 +815,7 @@
     $('custom-h').value = settings.customH;
     var dd = deviceDims();
     var save = settings.saveSize === 'original' ? 'オリジナルサイズ' : (dd ? (effectiveOrientation() === 'portrait' ? dd.w + '×' + dd.h : dd.h + '×' + dd.w) + ' px' : '最大 ' + targetSize(effectiveOrientation(), 'exact').w + '×' + targetSize(effectiveOrientation(), 'exact').h + ' px');
-    $('device-info').textContent = '保存サイズ: ' + save + ' ／ 縦横比 ' + (dd ? dd.w + ':' + dd.h : '画面に合わせて自動');
+    $('device-info').textContent = '保存サイズ: ' + save + '（' + (effectiveOrientation() === 'portrait' ? '縦向き' : '横向き') + '）' + (settings.orientation === 'auto' ? ' ／ 向きは画像の向き設定で変更できます' : '');
   }
   function onSettingChange(key, value) {
     if (settings[key] === value) return;
@@ -746,6 +823,7 @@
     if (key === 'orientation') settings.orientationSet = true;
     saveSettings();
     syncSettingsUI();
+    updateBadge();
     if (key === 'theme') applyTheme();
     if (key === 'fit') applyFit();
     if (key === 'orientation' || key === 'quality' || key === 'provider' || key === 'device' || key === 'customW' || key === 'customH') {
